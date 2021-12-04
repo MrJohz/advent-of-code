@@ -78,7 +78,7 @@ let power_consumption input = gamma_rate input * epsilon_rate input
 
 let () =
   let open Alcotest in
-  run "Day2"
+  run "Day3"
     [
       ( "Parsing lines",
         [
