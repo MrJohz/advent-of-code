@@ -23,6 +23,20 @@ module BingoGrid = struct
 
   type t = { rows : line list; cols : line list }
 
+  let print grid =
+    Printf.printf "g = ";
+    List.iter
+      (fun row ->
+        Printf.printf "\t";
+        List.iter
+          (fun item ->
+            if List.mem item row.unfound then Printf.printf "%4d" item
+            else Printf.printf "    ")
+          row.items;
+        Printf.printf "\n")
+      grid.rows;
+    Printf.printf "\n"
+
   let of_board (board : int list list) : t =
     {
       rows = List.map (fun r -> { items = r; found = []; unfound = r }) board;
@@ -59,24 +73,34 @@ module BingoGrid = struct
     in
     aux numbers grid 0
 
-  let total_unmarked (grid : t) : int =
-    List.fold_left
-      (fun acc line -> acc + List.fold_left ( + ) 0 line.unfound)
-      0 grid.rows
-
-  let score (grid : t) (numbers : int list) : int =
-    let final_grid, last_no = mark_until_complete numbers grid in
-    last_no * total_unmarked final_grid
+  let score (grid : t) (last_called : int) : int =
+    let total_unmarked (grid : t) : int =
+      List.fold_left
+        (fun acc line -> acc + List.fold_left ( + ) 0 line.unfound)
+        0 grid.rows
+    in
+    last_called * total_unmarked grid
 
   let race (numbers : int list) (grids : t list) : int =
     let rec aux numbers grids last_no =
       match List.find_opt complete grids with
-      | Some grid -> last_no * total_unmarked grid
+      | Some grid -> score grid last_no
       | None -> (
           match numbers with
           | [] -> assert false
-          | head :: numbers ->
-              aux numbers (List.map (fun grid -> mark head grid) grids) head)
+          | head :: numbers -> aux numbers (List.map (mark head) grids) head)
+    in
+    aux numbers grids 0
+
+  let race_backwards (numbers : int list) (grids : t list) : int =
+    let rec aux numbers grids _ =
+      match List.filter (fun g -> not (complete g)) grids with
+      | [] -> assert false
+      | [ grid ] -> race numbers [ grid ]
+      | grids -> (
+          match numbers with
+          | [] -> assert false
+          | head :: numbers -> aux numbers (List.map (mark head) grids) head)
     in
     aux numbers grids 0
 end
@@ -90,6 +114,31 @@ let commands filename =
   let result = ref [] in
   Stream.iter (fun value -> result := value :: !result) stream;
   List.rev !result
+
+let parse lines =
+  let rec group_grids lines current_grid finished_grids =
+    match lines with
+    | [] ->
+        if current_grid == [] then finished_grids
+        else BingoGrid.of_board (List.rev current_grid) :: finished_grids
+    | "" :: lines ->
+        if current_grid == [] then group_grids lines [] finished_grids
+        else
+          group_grids lines []
+            (BingoGrid.of_board (List.rev current_grid) :: finished_grids)
+    | line :: lines ->
+        let line =
+          String.split_on_char ' ' line
+          |> List.filter (fun s -> String.length s > 0)
+          |> List.map int_of_string
+        in
+        group_grids lines (line :: current_grid) finished_grids
+  in
+  match lines with
+  | [] -> assert false
+  | numbers :: cards ->
+      ( String.split_on_char ',' numbers |> List.map int_of_string,
+        group_grids cards [] [] )
 
 let () =
   let open Alcotest in
@@ -148,10 +197,12 @@ let () =
                     [ 2; 0; 12; 3; 7 ];
                   ]
               in
-              Alcotest.(check int)
-                "" 4512
-                (BingoGrid.score grid
-                   [ 7; 4; 9; 5; 11; 17; 23; 2; 0; 14; 21; 24 ]));
+              let grid, score =
+                BingoGrid.mark_until_complete
+                  [ 7; 4; 9; 5; 11; 17; 23; 2; 0; 14; 21; 24 ]
+                  grid
+              in
+              Alcotest.(check int) "" 4512 (BingoGrid.score grid score));
         ] );
       ( "Problem Cases",
         [
@@ -189,31 +240,47 @@ let () =
                 (BingoGrid.race
                    [ 7; 4; 9; 5; 11; 17; 23; 2; 0; 14; 21; 24 ]
                    grids));
-          (* test_case "Real (1)" `Quick (fun () ->
-                 Alcotest.(check int)
-                   "" 4118544
-                   (commands "inputs/day3.txt" |> power_consumption));
-             test_case "Example (2)" `Quick (fun () ->
-                 Alcotest.(check int)
-                   "" 230
-                   (life_support_rating
-                      [
-                        "00100";
-                        "11110";
-                        "10110";
-                        "10111";
-                        "10101";
-                        "01111";
-                        "00111";
-                        "11100";
-                        "10000";
-                        "11001";
-                        "00010";
-                        "01010";
-                      ]));
-             test_case "Real (2)" `Quick (fun () ->
-                 Alcotest.(check int)
-                   "" 3832770
-                   (commands "inputs/day3.txt" |> life_support_rating)); *)
+          test_case "Real (1)" `Quick (fun () ->
+              let numbers, grids = commands "inputs/day4.txt" |> parse in
+              Alcotest.(check int) "" 74320 (BingoGrid.race numbers grids));
+          test_case "Example (2)" `Quick (fun () ->
+              let grids =
+                [
+                  BingoGrid.of_board
+                    [
+                      [ 22; 13; 17; 11; 0 ];
+                      [ 8; 2; 23; 4; 24 ];
+                      [ 21; 9; 14; 16; 7 ];
+                      [ 6; 10; 3; 18; 5 ];
+                      [ 1; 12; 20; 15; 19 ];
+                    ];
+                  BingoGrid.of_board
+                    [
+                      [ 3; 15; 0; 2; 22 ];
+                      [ 9; 18; 13; 17; 5 ];
+                      [ 19; 8; 7; 25; 23 ];
+                      [ 20; 11; 10; 24; 4 ];
+                      [ 14; 21; 16; 12; 6 ];
+                    ];
+                  BingoGrid.of_board
+                    [
+                      [ 14; 21; 17; 24; 4 ];
+                      [ 10; 16; 15; 9; 19 ];
+                      [ 18; 8; 23; 26; 20 ];
+                      [ 22; 11; 13; 6; 5 ];
+                      [ 2; 0; 12; 3; 7 ];
+                    ];
+                ]
+              in
+              Alcotest.(check int)
+                "" 1924
+                (BingoGrid.race_backwards
+                   [ 7; 4; 9; 5; 11; 17; 23; 2; 0; 14; 21; 24; 10; 16; 13 ]
+                   grids));
+          test_case "Real (2)" `Quick (fun () ->
+              let numbers, grids = commands "inputs/day4.txt" |> parse in
+              Alcotest.(check int)
+                "" 17884
+                (BingoGrid.race_backwards numbers grids));
         ] );
     ]
