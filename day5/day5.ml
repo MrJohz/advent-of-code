@@ -132,7 +132,7 @@ let () =
           test_case "Real (2)" `Quick (fun () ->
               let lines = input "inputs/day5.txt" in
               Alcotest.(check int)
-                "" 8622
+                "" 22037
                 (lines |> generate_points |> insert_points |> count_crossings));
         ] );
     ]
