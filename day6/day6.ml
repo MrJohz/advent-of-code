@@ -108,7 +108,7 @@ let () =
               Alcotest.(check int)
                 "" 26984457539
                 (Shoal.count (generations 256 (Shoal.parse initial))));
-          test_case "Real (1)" `Quick (fun () ->
+          test_case "Real (2)" `Quick (fun () ->
               let initial = input "inputs/day6.txt" in
               Alcotest.(check int)
                 "" 1617359101538
