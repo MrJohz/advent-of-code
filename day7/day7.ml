@@ -120,6 +120,6 @@ let () =
               (check int) "" 168 (naive Crab.move_2 initial));
           test_case "Real (2)" `Quick (fun () ->
               let initial = input "inputs/day7.txt" in
-              (check int) "" 0 (naive Crab.move_2 initial));
+              (check int) "" 104822130 (naive Crab.move_2 initial));
         ] );
     ]
